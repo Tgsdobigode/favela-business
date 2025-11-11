@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Favela Business</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: linear-gradient(160deg, #002244, #0055aa);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    header {
+      text-align: center;
+      margin-top: 40px;
+    }
+    header h1 {
+      font-size: 2rem;
+      margin: 0;
+    }
+    form {
+      background: rgba(255,255,255,0.1);
+      padding: 20px;
+      border-radius: 20px;
+      width: 90%;
+      max-width: 400px;
+      margin-top: 20px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+      backdrop-filter: blur(8px);
+    }
+    input, textarea, button {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+    }
+    input, textarea {
+      background: rgba(255,255,255,0.8);
+      color: #000;
+    }
+    button {
+      background: #00c3ff;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    button:hover {
+      background: #009cd8;
+    }
+    #localizacao {
+      font-size: 0.9rem;
+      margin-top: 10px;
+      opacity: 0.9;
+    }
+    footer {
+      margin-top: auto;
+      padding: 10px;
+      font-size: 0.8rem;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Favela Business</h1>
+    <p>Conectando talentos da comunidade ao mundo 🌎</p>
+  </header>
+
+  <form id="formServico">
+    <input type="text" id="nome" placeholder="Seu nome" required />
+    <input type="text" id="servico" placeholder="O que você faz?" required />
+    <textarea id="descricao" placeholder="Fale um pouco do seu serviço..." required></textarea>
+    <input type="text" id="contato" placeholder="WhatsApp ou telefone" required />
+    <button type="button" onclick="enviar()">Cadastrar</button>
+  </form>
+
+  <p id="localizacao">📍 Obtendo localização...</p>
+
+  <footer>
+    <p>Favela Business © 2025</p>
+  </footer>
+
+  <script>
+    function enviar() {
+      const nome = document.getElementById('nome').value;
+      const servico = document.getElementById('servico').value;
+      const descricao = document.getElementById('descricao').value;
+      const contato = document.getElementById('contato').value;
+
+      if (nome && servico && descricao && contato) {
+        alert("Cadastro enviado!\n" +
+              "Nome: " + nome + "\n" +
+              "Serviço: " + servico + "\n" +
+              "Descrição: " + descricao + "\n" +
+              "Contato: " + contato);
+      } else {
+        alert("Preencha todos os campos obrigatórios!");
+      }
+    }
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(function(pos) {
+        document.getElementById('localizacao').innerText =
+          "📍 Localização: " + pos.coords.latitude.toFixed(5) + ", " + pos.coords.longitude.toFixed(5);
+      }, function() {
+        document.getElementById('localizacao').innerText = "Não foi possível obter localização.";
+      });
+    }
+  </script>
+</body>
+</html>
