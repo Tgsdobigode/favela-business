@@ -186,4 +186,3 @@ export const db = {
     localStorage.removeItem(SESSION_KEY);
   }
 };
-
