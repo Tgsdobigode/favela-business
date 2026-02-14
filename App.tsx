@@ -1,8 +1,10 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ServiceProvider, User } from './types'; 
-import { ServiceCard } from './components/ServiceCard'; 
-import { ImpactStats } from './components/ImpactStats'; 
-import { optimizeServiceDescription } from './services/geminiService';
+import { ServiceProvider, User } from './types';
+import ServiceCard from './components/ServiceCard';
+import ImpactStats from './components/ImpactStats';
+import LocalOpportunities from './components/LocalOpportunities';
+import { optimizeServiceDescription, searchLocalOpportunities } from './services/geminiService';
 import { db } from './services/db';
 
 const CATEGORIES = ["Todos", "Serviços Gerais", "Beleza & Estética", "Gastronomia", "Educação", "Tecnologia", "Artesanato"];
@@ -12,6 +14,8 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<'feed' | 'profile' | 'premium'>('feed');
   const [isLoading, setIsLoading] = useState(true);
+  const [isSearchingOps, setIsSearchingOps] = useState(false);
+  const [localOps, setLocalOps] = useState<{ text: string, sources: any[] } | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todos');
@@ -21,7 +25,12 @@ const App: React.FC = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
-    name: '', serviceType: '', description: '', contact: '', category: CATEGORIES[1], termsAccepted: false
+    name: '', 
+    serviceType: '', 
+    description: '', 
+    contact: '', 
+    category: CATEGORIES[1], 
+    termsAccepted: false
   });
   
   const [authFormData, setAuthFormData] = useState({ name: '', email: '' });
@@ -29,25 +38,29 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const init = async () => {
-      try {
-        const [storedProviders, user] = await Promise.all([
-          db.getProviders(),
-          db.getCurrentUser()
-        ]);
-        setProviders(storedProviders || []);
-        setCurrentUser(user);
-      } catch (error) {
-        console.error("Erro ao carregar dados:", error);
-      } finally {
-        setIsLoading(false);
-      }
+      const [storedProviders, user] = await Promise.all([
+        db.getProviders(),
+        db.getCurrentUser()
+      ]);
+      setProviders(storedProviders);
+      setCurrentUser(user);
+      setIsLoading(false);
     };
     init();
 
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        (err) => console.log("Localização negada")
+        async (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          setLocation({ lat, lng });
+          
+          setIsSearchingOps(true);
+          const ops = await searchLocalOpportunities(lat, lng);
+          setLocalOps(ops);
+          setIsSearchingOps(false);
+        },
+        () => console.warn("Geolocalização não permitida")
       );
     }
   }, []);
@@ -63,6 +76,12 @@ const App: React.FC = () => {
       })
       .sort((a, b) => (b.isPremium ? 1 : 0) - (a.isPremium ? 1 : 0));
   }, [providers, searchTerm, selectedCategory]);
+
+  const handleLogout = async () => {
+    await db.logout();
+    setCurrentUser(null);
+    setActiveTab('feed');
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -95,9 +114,12 @@ const App: React.FC = () => {
       if (uploadedUrl) imageUrl = uploadedUrl;
     }
 
+    // Destruturando para remover o termsAccepted que não pertence ao ServiceProvider
+    const { termsAccepted, ...restFormData } = formData;
+
     const newProvider: ServiceProvider = {
-      ...formData,
-      id: Math.random().toString(36).substr(2, 9),
+      ...restFormData,
+      id: Math.random().toString(36).substring(2, 11),
       ownerId: currentUser.id,
       createdAt: Date.now(),
       location: location || undefined,
@@ -105,20 +127,26 @@ const App: React.FC = () => {
       imageUrl: imageUrl
     };
 
-    await db.saveProvider(newProvider);
-    setProviders(prev => [newProvider, ...prev]);
-    
-    optimizeServiceDescription(newProvider).then(async (optimized) => {
-      const updated = { ...newProvider, optimizedDescription: optimized };
-      await db.saveProvider(updated);
-      setProviders(current => current.map(p => p.id === newProvider.id ? updated : p));
-    });
+    try {
+      await db.saveProvider(newProvider);
+      setProviders(prev => [newProvider, ...prev]);
+      
+      optimizeServiceDescription(newProvider).then(async (optimized) => {
+        const updated = { ...newProvider, optimizedDescription: optimized };
+        await db.saveProvider(updated);
+        setProviders(current => current.map(p => p.id === newProvider.id ? updated : p));
+      });
 
-    setActiveTab('feed');
-    setIsLoading(false);
-    setImagePreview(null);
-    setImageFile(null);
-    setFormData({ ...formData, name: '', serviceType: '', description: '', contact: '' });
+      setActiveTab('feed');
+      setImagePreview(null);
+      setImageFile(null);
+      setFormData({ ...formData, name: '', serviceType: '', description: '', contact: '' });
+    } catch (err) {
+      console.error("Erro ao registrar negócio:", err);
+      alert("Erro ao salvar dados no Supabase. Verifique se as tabelas foram criadas corretamente.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (isLoading && providers.length === 0) {
@@ -137,7 +165,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="bg-[#0f172a] min-h-screen text-slate-200 selection:bg-cyan-500 selection:text-white pb-20 lg:pb-0 flex flex-col font-sans">
+    <div className="bg-[#0f172a] min-h-screen text-slate-200 selection:bg-cyan-500 selection:text-white pb-20 lg:pb-0 flex flex-col">
       <header className="sticky top-0 z-40 bg-[#1e293b]/90 backdrop-blur-xl border-b border-slate-700/50">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4 flex-1">
@@ -162,12 +190,16 @@ const App: React.FC = () => {
               <i className="fa-solid fa-crown"></i> Premium
             </button>
             {currentUser ? (
-              <button onClick={() => setActiveTab('profile')} className="relative group shrink-0">
-                <div className="w-9 h-9 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center font-bold text-cyan-400 shadow-lg overflow-hidden">
-                  {currentUser.avatarUrl ? <img src={currentUser.avatarUrl} alt="User" className="w-full h-full object-cover" /> : currentUser.name[0]}
-                </div>
-                {currentUser.isPremium && <div className="absolute -top-1 -right-1 bg-amber-500 w-3.5 h-3.5 rounded-full border-2 border-[#1e293b] flex items-center justify-center"><i className="fa-solid fa-check text-[5px] text-white"></i></div>}
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setActiveTab('profile')} className="relative group shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center font-bold text-cyan-400 shadow-lg overflow-hidden">
+                    {currentUser.avatarUrl ? <img src={currentUser.avatarUrl} alt="User" className="w-full h-full object-cover" /> : currentUser.name[0]}
+                  </div>
+                </button>
+                <button onClick={handleLogout} className="text-slate-500 hover:text-red-400 transition-colors p-2">
+                  <i className="fa-solid fa-right-from-bracket"></i>
+                </button>
+              </div>
             ) : (
               <button onClick={() => setShowAuthModal(true)} className="bg-white text-slate-900 px-4 py-1.5 rounded-full font-black text-[10px] uppercase hover:bg-cyan-400 transition-all shadow-xl shrink-0">Entrar</button>
             )}
@@ -189,6 +221,7 @@ const App: React.FC = () => {
               </p>
             </div>
           </div>
+          
           <ImpactStats />
         </aside>
 
@@ -217,9 +250,9 @@ const App: React.FC = () => {
                     <ServiceCard key={p.id} provider={p} onOptimize={() => {}} isOptimizing={false} currentUser={currentUser} />
                   ))
                 ) : (
-                  <div className="text-center py-20 opacity-50">
-                    <i className="fa-solid fa-box-open text-4xl mb-4"></i>
-                    <p>Nenhum serviço encontrado nesta categoria.</p>
+                  <div className="text-center py-20 bg-slate-900/50 rounded-3xl border border-dashed border-slate-800">
+                    <i className="fa-solid fa-ghost text-4xl text-slate-800 mb-4"></i>
+                    <p className="text-slate-500 text-sm">Nenhum talento encontrado nesta busca.</p>
                   </div>
                 )}
               </div>
@@ -227,8 +260,8 @@ const App: React.FC = () => {
           )}
 
           {activeTab === 'profile' && (
-            <div className="bg-[#1e293b] rounded-2xl border border-slate-700 p-8 shadow-2xl">
-              <h2 className="text-2xl font-black text-white mb-2 uppercase italic tracking-tighter">Minha Vitrine</h2>
+            <div className="bg-[#1e293b] rounded-2xl border border-slate-700 p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+              <h2 className="text-2xl font-black text-white mb-2 uppercase italic tracking-tighter">Minha Vitrine Favela Business</h2>
               <p className="text-slate-500 text-xs mb-8">Cadastre seu negócio e apareça para a comunidade.</p>
               
               <form onSubmit={handleRegisterBusiness} className="space-y-5">
@@ -250,25 +283,25 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm focus:border-cyan-500 outline-none" placeholder="Nome do Negócio" />
-                  <input required value={formData.contact} onChange={e => setFormData({...formData, contact: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm focus:border-cyan-500 outline-none" placeholder="WhatsApp (DDD)" />
+                  <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm focus:border-cyan-500 outline-none transition-all" placeholder="Nome do Negócio" />
+                  <input required value={formData.contact} onChange={e => setFormData({...formData, contact: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm focus:border-cyan-500 outline-none transition-all" placeholder="WhatsApp (DDD)" />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm focus:border-cyan-500 outline-none">
                     {CATEGORIES.filter(c => c !== 'Todos').map(c => <option key={c} value={c} className="bg-slate-900">{c}</option>)}
                   </select>
-                  <input required value={formData.serviceType} onChange={e => setFormData({...formData, serviceType: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm focus:border-cyan-500 outline-none" placeholder="O que você faz?" />
+                  <input required value={formData.serviceType} onChange={e => setFormData({...formData, serviceType: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm focus:border-cyan-500 outline-none transition-all" placeholder="O que você faz?" />
                 </div>
 
-                <textarea required value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm h-32 focus:border-cyan-500 outline-none resize-none" placeholder="Descreva seus diferenciais..." />
+                <textarea required value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm h-32 focus:border-cyan-500 outline-none resize-none transition-all" placeholder="Descreva seus diferenciais..." />
 
                 <div className="flex items-center gap-3 bg-slate-900/50 p-4 rounded-xl">
                   <input type="checkbox" id="terms" checked={formData.termsAccepted} onChange={e => setFormData({...formData, termsAccepted: e.target.checked})} className="w-4 h-4" />
                   <label htmlFor="terms" className="text-[11px]">Aceito os termos da Favela Business.</label>
                 </div>
 
-                <button type="submit" disabled={isLoading} className="w-full bg-cyan-500 text-slate-900 py-4 rounded-xl font-black uppercase text-xs tracking-widest">
+                <button type="submit" disabled={isLoading} className="w-full bg-cyan-500 text-slate-900 py-4 rounded-xl font-black uppercase text-xs tracking-[0.1em]">
                   {isLoading ? 'Salvando...' : 'Postar Anúncio'}
                 </button>
               </form>
@@ -278,7 +311,7 @@ const App: React.FC = () => {
           {activeTab === 'premium' && (
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl border border-amber-500/30 p-10 text-center shadow-2xl">
                <i className="fa-solid fa-crown text-4xl text-amber-500 mb-6"></i>
-               <h2 className="text-2xl font-black text-white mb-2 uppercase italic">Premium</h2>
+               <h2 className="text-2xl font-black text-white mb-2 uppercase italic">Favela Business Premium</h2>
                <p className="text-slate-400 text-sm mb-8">Destaque-se na sua região e conquiste mais clientes.</p>
                <button className="w-full py-5 bg-amber-500 text-slate-900 font-black rounded-xl uppercase tracking-widest text-[10px]">
                  Assinar por R$ 19,90/mês
@@ -287,15 +320,25 @@ const App: React.FC = () => {
           )}
         </section>
 
-        <aside className="lg:col-span-3">
+        <aside className="lg:col-span-3 space-y-6">
+          <LocalOpportunities data={localOps} isLoading={isSearchingOps} />
+          
           <div className="bg-[#1e293b] rounded-2xl border border-slate-700/50 p-6 shadow-xl">
-            <h4 className="text-[10px] font-black uppercase text-cyan-400 mb-4 tracking-widest">Dica</h4>
+            <h4 className="text-[10px] font-black uppercase text-cyan-400 mb-4 tracking-widest">
+              Dica Favela Business
+            </h4>
             <p className="text-[11px] text-slate-400 leading-relaxed italic">
               "Fotos de alta qualidade aumentam suas chances de contratação em até 3x!"
             </p>
           </div>
         </aside>
       </main>
+
+      <footer className="bg-slate-950/50 py-3 px-4 text-center border-t border-slate-800 hidden lg:block">
+        <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest flex items-center justify-center gap-2">
+          <i className="fa-solid fa-code"></i> Favela Business © 2025 • Transformando comunidades através da tecnologia.
+        </p>
+      </footer>
 
       <nav className="fixed lg:hidden bottom-0 left-0 right-0 bg-[#1e293b]/95 backdrop-blur-md border-t border-slate-700 p-3 flex justify-around items-center z-50">
         <button onClick={() => setActiveTab('feed')} className={`flex flex-col items-center gap-1 ${activeTab === 'feed' ? 'text-cyan-400' : 'text-slate-500'}`}>
@@ -306,12 +349,18 @@ const App: React.FC = () => {
           <i className="fa-solid fa-briefcase text-lg"></i>
           <span className="text-[8px] font-black uppercase">Meu Negócio</span>
         </button>
+        {currentUser && (
+          <button onClick={handleLogout} className="flex flex-col items-center gap-1 text-slate-500">
+            <i className="fa-solid fa-right-from-bracket text-lg"></i>
+            <span className="text-[8px] font-black uppercase">Sair</span>
+          </button>
+        )}
       </nav>
 
       {showAuthModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-sm">
           <div className="bg-[#1e293b] border border-slate-700 w-full max-w-sm rounded-3xl p-10 shadow-2xl">
-            <h2 className="text-2xl font-black text-white mb-6 uppercase tracking-tighter italic text-center">Login</h2>
+            <h2 className="text-2xl font-black text-white mb-6 uppercase tracking-tighter italic text-center">Favela Business</h2>
             <form onSubmit={handleLogin} className="space-y-4">
               <input required value={authFormData.name} onChange={e => setAuthFormData({...authFormData, name: e.target.value})} className="w-full bg-slate-900 border border-slate-700 text-white p-4 rounded-xl text-sm outline-none" placeholder="Seu Nome" />
               <input required type="email" value={authFormData.email} onChange={e => setAuthFormData({...authFormData, email: e.target.value})} className="w-full bg-slate-900 border border-slate-700 text-white p-4 rounded-xl text-sm outline-none" placeholder="E-mail" />
