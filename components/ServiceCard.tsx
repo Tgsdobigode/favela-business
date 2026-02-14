@@ -115,4 +115,3 @@ const ServiceCard: React.FC<ServiceCardProps> = ({ provider, currentUser }) => {
 };
 
 export default ServiceCard;
-
