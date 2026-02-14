@@ -1,11 +1,13 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ServiceProvider, User } from './types';
-import ServiceCard from './components/ServiceCard';
-import ImpactStats from './components/ImpactStats';
-import LocalOpportunities from './components/LocalOpportunities';
+// Nós ajustamos a importação para bater com os arquivos da sua pasta components
+import { ServiceCard } from './components/ServiceCard';
+import { ImpactStats } from './components/ImpactStats';
+import { LocalOpportunities } from './components/LocalOpportunities';
 import { optimizeServiceDescription, searchLocalOpportunities } from './services/geminiService';
 import { db } from './services/db';
+
+// Nós removemos a importação do index.css para evitar erro no deploy da Vercel
 
 const CATEGORIES = ["Todos", "Serviços Gerais", "Beleza & Estética", "Gastronomia", "Educação", "Tecnologia", "Artesanato"];
 
@@ -114,7 +116,6 @@ const App: React.FC = () => {
       if (uploadedUrl) imageUrl = uploadedUrl;
     }
 
-    // Destruturando para remover o termsAccepted que não pertence ao ServiceProvider
     const { termsAccepted, ...restFormData } = formData;
 
     const newProvider: ServiceProvider = {
@@ -143,7 +144,7 @@ const App: React.FC = () => {
       setFormData({ ...formData, name: '', serviceType: '', description: '', contact: '' });
     } catch (err) {
       console.error("Erro ao registrar negócio:", err);
-      alert("Erro ao salvar dados no Supabase. Verifique se as tabelas foram criadas corretamente.");
+      alert("Erro ao salvar dados. Verifique a conexão com o banco.");
     } finally {
       setIsLoading(false);
     }
@@ -174,11 +175,10 @@ const App: React.FC = () => {
               <span className="hidden xs:inline uppercase tracking-tighter">Favela <span className="text-cyan-400">Business</span></span>
             </h1>
             <div className="relative flex-1 max-w-lg group">
-              <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-cyan-400 transition-colors"></i>
               <input 
                 type="text" 
                 placeholder="Buscar talentos locais..."
-                className="w-full bg-slate-900/50 border border-slate-700 rounded-full py-2 pl-10 pr-4 text-xs focus:outline-none focus:border-cyan-500 focus:bg-slate-900 transition-all shadow-inner"
+                className="w-full bg-slate-900/50 border border-slate-700 rounded-full py-2 pl-4 pr-4 text-xs focus:outline-none focus:border-cyan-500 focus:bg-slate-900 transition-all shadow-inner"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -187,18 +187,14 @@ const App: React.FC = () => {
           
           <div className="flex items-center gap-3">
             <button onClick={() => setActiveTab('premium')} className="hidden sm:flex items-center gap-2 bg-gradient-to-r from-amber-500 to-yellow-600 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase text-slate-900 hover:scale-105 transition-transform shadow-lg">
-              <i className="fa-solid fa-crown"></i> Premium
+              Premium
             </button>
             {currentUser ? (
               <div className="flex items-center gap-2">
-                <button onClick={() => setActiveTab('profile')} className="relative group shrink-0">
-                  <div className="w-9 h-9 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center font-bold text-cyan-400 shadow-lg overflow-hidden">
-                    {currentUser.avatarUrl ? <img src={currentUser.avatarUrl} alt="User" className="w-full h-full object-cover" /> : currentUser.name[0]}
-                  </div>
+                <button onClick={() => setActiveTab('profile')} className="w-9 h-9 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center font-bold text-cyan-400 overflow-hidden">
+                  {currentUser.avatarUrl ? <img src={currentUser.avatarUrl} alt="User" className="w-full h-full object-cover" /> : currentUser.name[0]}
                 </button>
-                <button onClick={handleLogout} className="text-slate-500 hover:text-red-400 transition-colors p-2">
-                  <i className="fa-solid fa-right-from-bracket"></i>
-                </button>
+                <button onClick={handleLogout} className="text-slate-500 hover:text-red-400 transition-colors p-2">Sair</button>
               </div>
             ) : (
               <button onClick={() => setShowAuthModal(true)} className="bg-white text-slate-900 px-4 py-1.5 rounded-full font-black text-[10px] uppercase hover:bg-cyan-400 transition-all shadow-xl shrink-0">Entrar</button>
@@ -251,7 +247,6 @@ const App: React.FC = () => {
                   ))
                 ) : (
                   <div className="text-center py-20 bg-slate-900/50 rounded-3xl border border-dashed border-slate-800">
-                    <i className="fa-solid fa-ghost text-4xl text-slate-800 mb-4"></i>
                     <p className="text-slate-500 text-sm">Nenhum talento encontrado nesta busca.</p>
                   </div>
                 )}
@@ -260,7 +255,7 @@ const App: React.FC = () => {
           )}
 
           {activeTab === 'profile' && (
-            <div className="bg-[#1e293b] rounded-2xl border border-slate-700 p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+            <div className="bg-[#1e293b] rounded-2xl border border-slate-700 p-8 shadow-2xl">
               <h2 className="text-2xl font-black text-white mb-2 uppercase italic tracking-tighter">Minha Vitrine Favela Business</h2>
               <p className="text-slate-500 text-xs mb-8">Cadastre seu negócio e apareça para a comunidade.</p>
               
@@ -268,15 +263,12 @@ const App: React.FC = () => {
                 <div className="flex flex-col items-center gap-4 mb-6">
                   <div 
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-32 h-32 rounded-3xl bg-slate-900 border-2 border-dashed border-slate-700 flex flex-col items-center justify-center cursor-pointer hover:border-cyan-500 transition-all overflow-hidden relative group"
+                    className="w-32 h-32 rounded-3xl bg-slate-900 border-2 border-dashed border-slate-700 flex flex-col items-center justify-center cursor-pointer hover:border-cyan-500 transition-all overflow-hidden relative"
                   >
                     {imagePreview ? (
                       <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
                     ) : (
-                      <>
-                        <i className="fa-solid fa-camera text-slate-600 text-2xl mb-2"></i>
-                        <span className="text-[9px] text-slate-500 font-bold uppercase">Foto do Serviço</span>
-                      </>
+                      <span className="text-[9px] text-slate-500 font-bold uppercase">Foto do Serviço</span>
                     )}
                   </div>
                   <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" />
@@ -310,7 +302,6 @@ const App: React.FC = () => {
 
           {activeTab === 'premium' && (
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl border border-amber-500/30 p-10 text-center shadow-2xl">
-               <i className="fa-solid fa-crown text-4xl text-amber-500 mb-6"></i>
                <h2 className="text-2xl font-black text-white mb-2 uppercase italic">Favela Business Premium</h2>
                <p className="text-slate-400 text-sm mb-8">Destaque-se na sua região e conquiste mais clientes.</p>
                <button className="w-full py-5 bg-amber-500 text-slate-900 font-black rounded-xl uppercase tracking-widest text-[10px]">
@@ -322,40 +313,14 @@ const App: React.FC = () => {
 
         <aside className="lg:col-span-3 space-y-6">
           <LocalOpportunities data={localOps} isLoading={isSearchingOps} />
-          
-          <div className="bg-[#1e293b] rounded-2xl border border-slate-700/50 p-6 shadow-xl">
-            <h4 className="text-[10px] font-black uppercase text-cyan-400 mb-4 tracking-widest">
-              Dica Favela Business
-            </h4>
-            <p className="text-[11px] text-slate-400 leading-relaxed italic">
-              "Fotos de alta qualidade aumentam suas chances de contratação em até 3x!"
-            </p>
-          </div>
         </aside>
       </main>
 
       <footer className="bg-slate-950/50 py-3 px-4 text-center border-t border-slate-800 hidden lg:block">
-        <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest flex items-center justify-center gap-2">
-          <i className="fa-solid fa-code"></i> Favela Business © 2025 • Transformando comunidades através da tecnologia.
+        <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest">
+          Favela Business © 2025 • Transformando comunidades através da tecnologia.
         </p>
       </footer>
-
-      <nav className="fixed lg:hidden bottom-0 left-0 right-0 bg-[#1e293b]/95 backdrop-blur-md border-t border-slate-700 p-3 flex justify-around items-center z-50">
-        <button onClick={() => setActiveTab('feed')} className={`flex flex-col items-center gap-1 ${activeTab === 'feed' ? 'text-cyan-400' : 'text-slate-500'}`}>
-          <i className="fa-solid fa-house-chimney text-lg"></i>
-          <span className="text-[8px] font-black uppercase">Início</span>
-        </button>
-        <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1 ${activeTab === 'profile' ? 'text-cyan-400' : 'text-slate-500'}`}>
-          <i className="fa-solid fa-briefcase text-lg"></i>
-          <span className="text-[8px] font-black uppercase">Meu Negócio</span>
-        </button>
-        {currentUser && (
-          <button onClick={handleLogout} className="flex flex-col items-center gap-1 text-slate-500">
-            <i className="fa-solid fa-right-from-bracket text-lg"></i>
-            <span className="text-[8px] font-black uppercase">Sair</span>
-          </button>
-        )}
-      </nav>
 
       {showAuthModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-sm">
