@@ -1,12 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-// Ajuste de caminhos: Garantindo que o App encontre os arquivos nas pastas corretas
 import { ServiceProvider, User } from './types'; 
-import { ServiceCard } from './components/ServiceCard'; // Adicionado chaves {} pois exportamos como const
-import { ImpactStats } from './components/ImpactStats'; // Adicionado chaves {} para consistência
+import { ServiceCard } from './components/ServiceCard'; 
+import { ImpactStats } from './components/ImpactStats'; 
 import { optimizeServiceDescription } from './services/geminiService';
 import { db } from './services/db';
-
-// Removido o import do index.css que causava erro no build da Vercel
 
 const CATEGORIES = ["Todos", "Serviços Gerais", "Beleza & Estética", "Gastronomia", "Educação", "Tecnologia", "Artesanato"];
 
