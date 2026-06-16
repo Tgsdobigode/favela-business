@@ -1,0 +1,7 @@
+{
+  "name": "Favela Business",
+  "description": "A high-end platform for community entrepreneurs to showcase their talents, optimize their business profiles with AI, and connect with global opportunities.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
