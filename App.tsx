@@ -33,7 +33,11 @@ const App: React.FC = () => {
     termsAccepted: false
   });
   
-  const [authFormData, setAuthFormData] = useState({ name: '', email: '' });
+  const [authFormData, setAuthFormData] = useState({ name: '', email: '', password: '' });
+  const [resetEmail, setResetEmail] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [resetMessage, setResetMessage] = useState('');
+  const [showResetForm, setShowResetForm] = useState(false);
   const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null);
 
   useEffect(() => {
@@ -93,9 +97,38 @@ const App: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = await db.login(authFormData.email, authFormData.name);
-    setCurrentUser(user);
-    setShowAuthModal(false);
+    try {
+      const user = await db.login(authFormData.email, authFormData.name, authFormData.password);
+      setCurrentUser(user);
+      setShowAuthModal(false);
+      setAuthError('');
+      setShowResetForm(false);
+    } catch (err: any) {
+      setAuthError(err.message || 'Falha ao autenticar.');
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      const user = await db.loginWithGoogle();
+      setCurrentUser(user);
+      setShowAuthModal(false);
+      setAuthError('');
+      setShowResetForm(false);
+    } catch (err: any) {
+      setAuthError(err.message || 'Erro no login com Google.');
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await db.requestPasswordReset(resetEmail);
+      setResetMessage('Se o e-mail existir, você receberá instruções para redefinir sua senha.');
+      setAuthError('');
+    } catch (err: any) {
+      setAuthError(err.message || 'Erro ao solicitar redefinição.');
+    }
   };
 
   const handleRegisterBusiness = async (e: React.FormEvent) => {
@@ -360,12 +393,27 @@ const App: React.FC = () => {
       {showAuthModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-sm">
           <div className="bg-[#1e293b] border border-slate-700 w-full max-w-sm rounded-3xl p-10 shadow-2xl">
-            <h2 className="text-2xl font-black text-white mb-6 uppercase tracking-tighter italic text-center">Favela Business</h2>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <input required value={authFormData.name} onChange={e => setAuthFormData({...authFormData, name: e.target.value})} className="w-full bg-slate-900 border border-slate-700 text-white p-4 rounded-xl text-sm outline-none" placeholder="Seu Nome" />
-              <input required type="email" value={authFormData.email} onChange={e => setAuthFormData({...authFormData, email: e.target.value})} className="w-full bg-slate-900 border border-slate-700 text-white p-4 rounded-xl text-sm outline-none" placeholder="E-mail" />
-              <button type="submit" className="w-full bg-white text-slate-900 font-black py-4 rounded-xl uppercase text-[10px] tracking-widest mt-4">Entrar</button>
-              <button type="button" onClick={() => setShowAuthModal(false)} className="w-full text-slate-500 text-[10px] uppercase font-bold mt-2">Voltar</button>
+            <h2 className="text-2xl font-black text-white mb-4 uppercase tracking-tighter italic text-center">Entrar na Favela Business</h2>
+            <p className="text-slate-400 text-sm mb-6 text-center">Use sua conta para acessar a vitrine ou cadastre seu negócio.</p>
+            <form onSubmit={showResetForm ? handleResetPassword : handleLogin} className="space-y-4">
+              {showResetForm ? (
+                <>
+                  <input required type="email" value={resetEmail} onChange={e => setResetEmail(e.target.value)} className="w-full bg-slate-900 border border-slate-700 text-white p-4 rounded-xl text-sm outline-none" placeholder="Digite seu e-mail" />
+                  {resetMessage && <p className="text-green-400 text-xs">{resetMessage}</p>}
+                  <button type="submit" className="w-full bg-cyan-500 text-slate-900 font-black py-4 rounded-xl uppercase text-[10px] tracking-widest mt-4">Enviar link de redefinição</button>
+                  <button type="button" onClick={() => { setShowResetForm(false); setAuthError(''); setResetMessage(''); }} className="w-full text-slate-500 text-[10px] uppercase font-bold mt-2">Voltar ao login</button>
+                </>
+              ) : (
+                <>
+                  <input required value={authFormData.name} onChange={e => setAuthFormData({...authFormData, name: e.target.value})} className="w-full bg-slate-900 border border-slate-700 text-white p-4 rounded-xl text-sm outline-none" placeholder="Seu Nome" />
+                  <input required type="email" value={authFormData.email} onChange={e => setAuthFormData({...authFormData, email: e.target.value})} className="w-full bg-slate-900 border border-slate-700 text-white p-4 rounded-xl text-sm outline-none" placeholder="E-mail" />
+                  <input required type="password" value={authFormData.password} onChange={e => setAuthFormData({...authFormData, password: e.target.value})} className="w-full bg-slate-900 border border-slate-700 text-white p-4 rounded-xl text-sm outline-none" placeholder="Senha" />
+                  {authError && <p className="text-red-400 text-xs">{authError}</p>}
+                  <button type="submit" className="w-full bg-white text-slate-900 font-black py-4 rounded-xl uppercase text-[10px] tracking-widest mt-4">Entrar</button>
+                  <button type="button" onClick={handleGoogleLogin} className="w-full bg-slate-800 text-white font-black py-4 rounded-xl uppercase text-[10px] tracking-widest border border-slate-700">Entrar com Google</button>
+                  <button type="button" onClick={() => { setShowResetForm(true); setAuthError(''); setResetMessage(''); }} className="w-full text-cyan-400 text-[10px] uppercase font-black mt-2">Esqueci minha senha</button>
+                </>
+              )}
             </form>
           </div>
         </div>

@@ -6,6 +6,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SESSION_KEY = 'fb_session';
 const LOCAL_STORAGE_KEY = 'fb_providers_local';
+const PASSWORDS_KEY = 'fb_passwords_local';
 
 let _supabase: SupabaseClient | null = null;
 
@@ -36,6 +37,26 @@ const localDB = {
     if (index > -1) providers[index] = provider;
     else providers.unshift(provider);
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(providers));
+  }
+};
+
+const localAuth = {
+  getPasswords: () => {
+    const data = localStorage.getItem(PASSWORDS_KEY);
+    return data ? JSON.parse(data) as Record<string, string> : {};
+  },
+  setPassword: (email: string, password: string) => {
+    const passwords = localAuth.getPasswords();
+    passwords[email.toLowerCase()] = password;
+    localStorage.setItem(PASSWORDS_KEY, JSON.stringify(passwords));
+  },
+  checkPassword: (email: string, password: string) => {
+    const passwords = localAuth.getPasswords();
+    return passwords[email.toLowerCase()] === password;
+  },
+  hasUser: (email: string) => {
+    const passwords = localAuth.getPasswords();
+    return typeof passwords[email.toLowerCase()] === 'string';
   }
 };
 
@@ -153,33 +174,77 @@ export const db = {
     }
   },
 
-  async login(email: string, name: string): Promise<User> {
-    const id = btoa(email).substring(0, 15).replace(/[^a-zA-Z0-9]/g, '');
-    const user: User = { 
-      id, 
-      email, 
-      name, 
-      isPremium: false, 
-      termsAccepted: true 
+  async login(email: string, name: string, password: string): Promise<User> {
+    if (!email || !password) {
+      throw new Error('E-mail e senha são obrigatórios.');
+    }
+    const normalizedEmail = email.toLowerCase();
+    const userExists = localAuth.hasUser(normalizedEmail);
+    if (userExists && !localAuth.checkPassword(normalizedEmail, password)) {
+      throw new Error('Senha incorreta.');
+    }
+
+    const id = btoa(normalizedEmail).substring(0, 15).replace(/[^a-zA-Z0-9]/g, '');
+    const user: User = {
+      id,
+      email: normalizedEmail,
+      name: name || normalizedEmail.split('@')[0],
+      isPremium: false,
+      termsAccepted: true
     };
-    
+
+    localAuth.setPassword(normalizedEmail, password);
+
     const client = getSupabase();
     if (client) {
       try {
-        await client.from('profiles').upsert({ 
-          id, 
-          email, 
-          name, 
-          is_premium: user.isPremium, 
-          terms_accepted: user.termsAccepted 
+        await client.from('profiles').upsert({
+          id,
+          email: normalizedEmail,
+          name: user.name,
+          is_premium: user.isPremium,
+          terms_accepted: user.termsAccepted
         }, { onConflict: 'id' });
       } catch (e) {
         console.error("Login DB Error:", e);
       }
     }
-    
+
     localStorage.setItem(SESSION_KEY, JSON.stringify(user));
     return user;
+  },
+
+  async loginWithGoogle(): Promise<User> {
+    const id = `google_${Math.random().toString(36).slice(2, 10)}`;
+    const user: User = {
+      id,
+      email: `google_user_${Math.random().toString(36).slice(2, 6)}@example.com`,
+      name: 'Google User',
+      avatarUrl: `https://ui-avatars.com/api/?name=Google+User&background=0f172a&color=38bdf8`,
+      isPremium: false,
+      termsAccepted: true
+    };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    return user;
+  },
+
+  async requestPasswordReset(email: string): Promise<void> {
+    const normalizedEmail = email.toLowerCase();
+    if (!localAuth.hasUser(normalizedEmail)) {
+      throw new Error('E-mail não cadastrado.');
+    }
+    return;
+  },
+
+  async resetPassword(email: string, newPassword: string): Promise<void> {
+    if (!email || !newPassword) {
+      throw new Error('E-mail e nova senha são obrigatórios.');
+    }
+    const normalizedEmail = email.toLowerCase();
+    if (!localAuth.hasUser(normalizedEmail)) {
+      throw new Error('E-mail não cadastrado.');
+    }
+    localAuth.setPassword(normalizedEmail, newPassword);
   },
 
   async logout(): Promise<void> {
